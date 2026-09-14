@@ -60,6 +60,10 @@ async def process_scene(session, i, scene):
     text_line = scene.get('text', '').strip()
     if not text_line: return None
     
+    # 👇 MANDATORY TTS PACING FIX 👇
+    # Yeh line har sentence aur comma ke baad AI voice ko saans (pause) lene par majboor karegi
+    text_line = text_line.replace('. ', '... ').replace(', ', '... ')
+    
     scene_filename = os.path.join(TEMP_DIR, f"scene_{i}.mp4")
     raw_mp3 = os.path.join(TEMP_DIR, f"raw_a_{i}.mp3")
     vid_path = os.path.join(TEMP_DIR, f"raw_vid_{i}.mp4")
