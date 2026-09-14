@@ -13,14 +13,13 @@ pexels_key = os.environ.get('PEXELS_API_KEY')
 chat_id = os.environ.get('CHAT_ID')
 telegram_token = os.environ.get('TELEGRAM_BOT_TOKEN')
 
-# 👇 USA Channel Name (Updated to Short Form for Safety) 👇
-channel_name = "DSCH®" 
+# 👇 USA Channel Name (Updated for Corridor Zero) 👇
+channel_name = "CORRIDOR ZERO" 
 
 print(f"DEBUG: Processing {len(scenes_data)} scenes async...")
 
-# --- SMART DYNAMIC FALLBACK KEYWORDS ---
-# GitHub Actions se jo bhi fallback theme aayegi, yeh usey list mein badal dega.
-fallback_env = os.environ.get('FALLBACK_KEYWORDS', 'deep space, galaxy, universe, nebula, black hole, creepy space, cosmic horror')
+# --- SMART DYNAMIC FALLBACK KEYWORDS (Updated for Logistics) ---
+fallback_env = os.environ.get('FALLBACK_KEYWORDS', 'shipping container, massive cargo ship, dark logistics, automated port, freight train, night highway')
 FALLBACK_KEYWORDS = [kw.strip() for kw in fallback_env.split(',')]
 
 TEMP_DIR = "/dev/shm" if os.path.exists("/dev/shm") else os.getcwd()
@@ -31,12 +30,10 @@ async def fetch_pexels_video(session, keyword):
         for attempt in range(2):
             try:
                 await asyncio.sleep(random.uniform(0.1, 0.5))
-                # Jab attempts badhein toh safe page=1 rakho taaki khali result na aaye
                 random_page = random.randint(1, 5) if attempt == 0 else 1 
                 url = f"https://api.pexels.com/videos/search?query={urllib.parse.quote(query)}&per_page=5&page={random_page}&orientation=landscape&size=large"
                 
                 async with session.get(url, headers={"Authorization": pexels_key}, timeout=10) as response:
-                    # [IMPROVED]: Added Rate Limit (429) Handling
                     if response.status == 429:
                         await asyncio.sleep(2)
                         continue
@@ -103,24 +100,21 @@ async def process_scene(session, i, scene):
                     async with session.get(vid_url, timeout=15) as resp:
                         if resp.status == 200:
                             vid_bytes = await resp.read()
-                            # 👇 YAHAN LIMIT 50KB KAR DI GAYI HAI 👇
                             if len(vid_bytes) > 50000: 
                                 with open(vid_path, "wb") as f:
                                     f.write(vid_bytes)
                                 is_valid_video = True
-                                break # Download successful, break loop
+                                break 
                             else:
                                 print(f"Video file too small ({len(vid_bytes)} bytes) on attempt {download_attempt+1}, discarding.")
                 except Exception as e:
                     print(f"Failed to download video for scene {i} on attempt {download_attempt+1}: {str(e)}")
                     
-            vid_url = None # Reset for fallback fetch
+            vid_url = None
 
         pop_path = os.path.abspath("pop.mp3")
         has_pop = os.path.exists(pop_path)
 
-        # 👇 Watermark Fixed: 20% opacity (white@0.2), Top-Right (x=w-tw-40:y=40), Smaller Size (36) 👇
-        # [FIXED]: Added tpad and apad to guarantee perfect stream lengths and eliminate black gaps
         if is_valid_video:
             cmd = ['ffmpeg', '-y', '-ignore_editlist', '1', '-stream_loop', '-1', '-fflags', '+genpts', '-i', vid_path, '-ss', '0.2', '-i', raw_mp3]
             if has_pop: cmd += ['-i', pop_path]
@@ -183,9 +177,6 @@ async def main_pipeline():
         raw_video = os.path.join(TEMP_DIR, 'raw_video.mp4')
         final_video = 'final_video.mp4' 
         
-        # ==========================================
-        # PHASE 2: FLAWLESS AUDIO MUXING
-        # ==========================================
         await run_ffmpeg_async(['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', vid_list_path, '-c', 'copy', raw_video])
 
         bgm_path = os.path.abspath("bgm.mp3")
@@ -200,24 +191,20 @@ async def main_pipeline():
         else:
             shutil.move(raw_video, final_video)
 
-        # Cleanup
         if os.path.exists(vid_list_path): os.remove(vid_list_path)
         if os.path.exists(raw_video): os.remove(raw_video)
         for r in results:
             if os.path.exists(r['vid']): os.remove(r['vid'])
             if os.path.exists(r['aud']): os.remove(r['aud'])
 
-        # ==========================================
-        # PHASE 3: GITHUB RELEASES
-        # ==========================================
         video_link = None
         print("\n🚀 Uploading Video directly to GitHub Releases...")
         
         run_id = os.environ.get('GITHUB_RUN_ID', str(int(time.time())))
         tag_name = f"vid-{run_id}"
         
-        # 👇 Repo name updated as per screenshot and workflow 👇
-        repo_name = os.environ.get('GITHUB_REPOSITORY', "deepspaceusa-cyber/Deep-Space-USA-Long") 
+        # 👇 Repo name updated as per new channel 👇
+        repo_name = os.environ.get('GITHUB_REPOSITORY', "CorridorZero36-gif/Corridor-Zero-Long") 
         
         try:
             cmd = ['gh', 'release', 'create', tag_name, final_video, '--repo', repo_name, '--notes', 'Automated Video Render']
@@ -237,12 +224,9 @@ async def main_pipeline():
         except Exception as e:
             print(f"⚠️ Exception during GitHub upload: {str(e)}")
 
-        # ==========================================
-        # PHASE 4: TELEGRAM NOTIFICATION
-        # ==========================================
         if telegram_token:
             if video_link:
-                payload = {"chat_id": chat_id, "text": f"READY_TO_UPLOAD|{video_link}|{title.replace('|', '')}|{thumbnail_prompt.replace('|', '')}|{description.replace('|', '')}"}
+                payload = {"chat_id": chat_id, "text": f"READY_TO_UPLOAD|{video_link}|{title.replace('|', '')}||{description.replace('|', '')}"}
             else:
                 payload = {"chat_id": chat_id, "text": f"⚠️ ERROR: Upload fail hua. GitHub release banne mein problem aayi."}
             
