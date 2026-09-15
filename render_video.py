@@ -60,9 +60,9 @@ async def process_scene(session, i, scene):
     text_line = scene.get('text', '').strip()
     if not text_line: return None
     
-    # 👇 MANDATORY TTS PACING FIX 👇
-    # Yeh line har sentence aur comma ke baad AI voice ko saans (pause) lene par majboor karegi
-    text_line = text_line.replace('. ', '... ').replace(', ', '... ')
+    # 👇 MANDATORY TTS PACING FIX (Foolproof logic) 👇
+    # Removes all standard periods and forces the TTS to take a deep breath.
+    text_line = text_line.replace('.', '...').replace(',', '...')
     
     scene_filename = os.path.join(TEMP_DIR, f"scene_{i}.mp4")
     raw_mp3 = os.path.join(TEMP_DIR, f"raw_a_{i}.mp3")
@@ -88,7 +88,9 @@ async def process_scene(session, i, scene):
             return None
             
         raw_dur = await get_audio_duration(raw_mp3)
-        dur = max(1.0, raw_dur - 0.2) 
+        # 👇 CRITICAL FIX: Add 1.0 second padding instead of cutting audio. 
+        # Yeh har scene ke aakhir mein 1 second ka silent pause dega.
+        dur = max(1.0, raw_dur + 1.0) 
         fade_out = max(0, dur - 0.5)
         
         # --- Visual Pipeline with Retries and Size Check ---
@@ -117,25 +119,47 @@ async def process_scene(session, i, scene):
             vid_url = None
 
         pop_path = os.path.abspath("pop.mp3")
+        whoosh_path = os.path.abspath("whoosh.mp3")
         has_pop = os.path.exists(pop_path)
+        has_whoosh = os.path.exists(whoosh_path)
 
+        # 👇 Visual Command 👇
         if is_valid_video:
             cmd = ['ffmpeg', '-y', '-ignore_editlist', '1', '-stream_loop', '-1', '-fflags', '+genpts', '-i', vid_path, '-ss', '0.2', '-i', raw_mp3]
-            if has_pop: cmd += ['-i', pop_path]
-            v_filter = f"[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,setsar=1,format=yuv420p,fps=30,unsharp=5:5:0.5:5:5:0.0,eq=contrast=1.1:saturation=1.25,drawtext=text='{channel_name}':fontcolor=white@0.2:fontsize=36:x=w-tw-40:y=40,fade=t=in:st=0:d=0.5,fade=t=out:st={fade_out}:d=0.5,tpad=stop_mode=clone:stop_duration=5[v]"
         else:
             cmd = ['ffmpeg', '-y', '-f', 'lavfi', '-i', f'color=c=#151525:s=1920x1080:d={dur}', '-ss', '0.2', '-i', raw_mp3]
-            if has_pop: cmd += ['-i', pop_path]
-            v_filter = f"[0:v]drawtext=text='{channel_name}':fontcolor=white@0.2:fontsize=36:x=w-tw-40:y=40,fade=t=in:st=0:d=0.5,fade=t=out:st={fade_out}:d=0.5,tpad=stop_mode=clone:stop_duration=5[v]"
 
+        # Add SFX Inputs
+        if has_pop: cmd += ['-i', pop_path]
+        if has_whoosh: cmd += ['-i', whoosh_path]
+        
+        v_filter = f"[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,setsar=1,format=yuv420p,fps=30,unsharp=5:5:0.5:5:5:0.0,eq=contrast=1.1:saturation=1.25,drawtext=text='{channel_name}':fontcolor=white@0.2:fontsize=36:x=w-tw-40:y=40,fade=t=in:st=0:d=0.5,fade=t=out:st={fade_out}:d=0.5,tpad=stop_mode=clone:stop_duration=5[v]"
+
+        # 👇 DYNAMIC AUDIO MIXING FOR SFX (Transformative Value) 👇
+        inputs = 1
+        a_filter = "[1:a]volume=1.0[voice]"
+        mix_parts = "[voice]"
+        
+        audio_idx = 2
         if has_pop:
-            a_filter = "[1:a]volume=1.0[voice];[2:a]volume=0.8[pop];[voice][pop]amix=inputs=2:duration=first:dropout_transition=0,apad=pad_dur=5[aout_mix];[aout_mix]volume=2.0[aout]"
-            filter_complex = f"{v_filter};{a_filter}"
-            a_map = '[aout]'
+            a_filter += f";[{audio_idx}:a]volume=0.8[pop]"
+            mix_parts += "[pop]"
+            inputs += 1
+            audio_idx += 1
+            
+        if has_whoosh:
+            a_filter += f";[{audio_idx}:a]volume=0.9[whoosh]"
+            mix_parts += "[whoosh]"
+            inputs += 1
+            audio_idx += 1
+            
+        if inputs > 1:
+            a_filter += f";{mix_parts}amix=inputs={inputs}:duration=first:dropout_transition=0,apad=pad_dur=5[aout_mix];[aout_mix]volume=2.0[aout]"
         else:
-            a_filter = "[1:a]apad=pad_dur=5[aout]"
-            filter_complex = f"{v_filter};{a_filter}"
-            a_map = '[aout]'
+            a_filter += ";[1:a]apad=pad_dur=5[aout]"
+            
+        filter_complex = f"{v_filter};{a_filter}"
+        a_map = '[aout]'
             
         cmd += [
             '-filter_complex', filter_complex,
