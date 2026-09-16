@@ -14,7 +14,7 @@ chat_id = os.environ.get('CHAT_ID')
 telegram_token = os.environ.get('TELEGRAM_BOT_TOKEN')
 
 # 👇 USA Channel Name (Updated for Corridor Zero) 👇
-channel_name = "CORRIDOR ZERO" 
+channel_name = "CZ®" 
 
 print(f"DEBUG: Processing {len(scenes_data)} scenes async...")
 
@@ -133,6 +133,9 @@ async def process_scene(session, i, scene):
         if has_pop: cmd += ['-i', pop_path]
         if has_whoosh: cmd += ['-i', whoosh_path]
         
+        # ----------------------------------------------------------------------
+        # WATERMARK POSITION: (x=w-tw-40:y=40 Top-Right Corner)
+        # ----------------------------------------------------------------------
         v_filter = f"[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,setsar=1,format=yuv420p,fps=30,unsharp=5:5:0.5:5:5:0.0,eq=contrast=1.1:saturation=1.25,drawtext=text='{channel_name}':fontcolor=white@0.2:fontsize=36:x=w-tw-40:y=40,fade=t=in:st=0:d=0.5,fade=t=out:st={fade_out}:d=0.5,tpad=stop_mode=clone:stop_duration=5[v]"
 
         # 👇 DYNAMIC AUDIO MIXING FOR SFX (Transformative Value) 👇
