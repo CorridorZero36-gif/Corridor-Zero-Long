@@ -14,7 +14,7 @@ chat_id = os.environ.get('CHAT_ID')
 telegram_token = os.environ.get('TELEGRAM_BOT_TOKEN')
 
 # 👇 USA Channel Name (Updated for Corridor Zero) 👇
-channel_name = "CZ®" 
+channel_name = "CorridorZ®" 
 
 print(f"DEBUG: Processing {len(scenes_data)} scenes async...")
 
